@@ -9,6 +9,15 @@ html, body {
   background-color: #fff;
 }
 
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+}
+
 main {
   margin: auto;
   width: 50%;
@@ -18,4 +27,74 @@ main {
 main > h1 {
   text-align: center;
   font-size: 3.5em;
+}
+
+form#uploadForm {
+  background: #fff;
+  padding: 32px 28px 24px 28px;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1.5px 4px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 320px;
+  max-width: 100vw;
+}
+
+form#uploadForm label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+form#uploadForm input[type="text"],
+form#uploadForm input[type="email"],
+form#uploadForm input[type="file"] {
+  padding: 8px 10px;
+  border: 1px solid #bfc9d1;
+  border-radius: 6px;
+  font-size: 1em;
+  background: #f7fafc;
+  transition: border 0.2s;
+}
+
+form#uploadForm input:focus {
+  border: 1.5px solid #6a9ae2;
+  outline: none;
+}
+
+form#uploadForm button[type="submit"] {
+  margin-top: 10px;
+  padding: 10px 0;
+  background: linear-gradient(90deg, #6a9ae2 0%, #4f8edc 100%);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 1.1em;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(80,120,200,0.08);
+  transition: background 0.2s, transform 0.1s;
+}
+
+form#uploadForm button[type="submit"]:hover {
+  background: linear-gradient(90deg, #4f8edc 0%, #6a9ae2 100%);
+  transform: translateY(-2px) scale(1.03);
+}
+
+form#uploadForm input[type="file"] {
+  background: #f7fafc;
+  border: none;
+  padding: 0;
+}
+
+@media (max-width: 600px) {
+  main {
+    width: 90%;
+    padding: 10px;
+  }
+  form#uploadForm {
+    min-width: unset;
+    width: 100%;
+    padding: 18px 8px 14px 8px;
+  }
 }
