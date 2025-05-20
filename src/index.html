@@ -1,36 +1,272 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css"> <!-- Załóżmy, że masz plik styles.css -->
   <title>Formularz Aarona</title>
+  <style>
+    /* Proste style dla lepszej czytelności */
+    body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+    main { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    h1 { color: #333; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input[type="text"], input[type="email"], input[type="file"] {
+      width: calc(100% - 22px);
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button[type="submit"] {
+      background-color: #0078d4;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button[type="submit"]:hover { background-color: #005a9e; }
+    #statusMessage { margin-top: 15px; padding: 10px; border-radius: 4px; }
+    .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;}
+    .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;}
+  </style>
 </head>
 
 <body>
   <main>
     <h1>Aaron form test</h1>
+    <form id="uploadForm">
+      <div class="form-group">
+        <label for="name">Imię:</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+      <div class="form-group">
+        <label for="email">E-mail:</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+      <div class="form-group">
+        <label for="file">Wybierz plik (jako załącznik):</label>
+        <input type="file" id="file" name="file" required>
+      </div>
+      <button type="submit">Prześlij</button>
+    </form>
+    <div id="statusMessage"></div>
   </main>
 
-  <form id="uploadForm">
-    <div class="form-group">
-      <label for="name">Imię:</label>
-      <input type="text" id="name" name="name" required>
-    </div>
-    <div class="form-group">
-      <label for="email">E-mail:</label>
-      <input type="email" id="email" name="email" required>
-    </div>
-    <div class="form-group">
-      <label for="file">Wybierz plik:</label>
-      <input type="file" id="file" name="file" required>
-    </div>
-    <button type="submit">Prześlij</button>
-  </form>
+  <script>
+    // --- KONFIGURACJA - WYPEŁNIJ TE WARTOŚCI ---
+    const TENANT_ID = "TWOJ_TENANT_ID"; // Identyfikator katalogu (dzierżawy) Azure AD
+    const APP_CLIENT_ID = "TWOJ_APP_CLIENT_ID"; // Identyfikator aplikacji (klienta)
+    const APP_CLIENT_SECRET = "TWOJ_APP_CLIENT_SECRET"; // Klucz tajny klienta
+    const SHAREPOINT_SITE_URL = "https://twojadomena.sharepoint.com/sites/nazwatwojejwitryny"; // Pełny URL do Twojej witryny SharePoint
+    const SHAREPOINT_LIST_NAME = "NazwaTwojejListy"; // Nazwa wyświetlana listy SharePoint (np. "Zgłoszenia z Formularza Aarona")
+    // --- KONIEC KONFIGURACJI ---
 
+    // --- OSTRZEŻENIE DOTYCZĄCE BEZPIECZEŃSTWA ---
+    // Przechowywanie APP_CLIENT_SECRET w kodzie front-end jest NIEBEZPIECZNE.
+    // W środowisku produkcyjnym sekret powinien być zarządzany po stronie serwera.
+    // Ten skrypt jest przeznaczony do celów demonstracyjnych/testowych.
+    // --- KONIEC OSTRZEŻENIA ---
 
+    const statusMessageDiv = document.getElementById('statusMessage');
 
+    document.getElementById('uploadForm').addEventListener('submit', async function (event) {
+      event.preventDefault();
+      statusMessageDiv.textContent = 'Przetwarzanie...';
+      statusMessageDiv.className = '';
+
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const fileInput = document.getElementById('file');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        showError('Nie wybrano pliku.');
+        return;
+      }
+
+      // Uwaga: Dodawanie załączników jako contentBytes (Base64) jest odpowiednie dla małych plików (zwykle do ok. 3-4MB).
+      // Dla większych plików Graph API zaleca użycie "upload session".
+      if (file.size > 4 * 1024 * 1024) { // Przykładowy limit 4MB
+          showError('Plik jest za duży. Maksymalny rozmiar to około 4MB dla tej metody przesyłania.');
+          return;
+      }
+
+      try {
+        // 1. Uzyskaj token dostępowy
+        const accessToken = await getAccessToken();
+        if (!accessToken) throw new Error("Nie udało się uzyskać tokenu dostępowego.");
+
+        // 2. Uzyskaj ID witryny SharePoint
+        const siteId = await getSiteId(accessToken, SHAREPOINT_SITE_URL);
+        if (!siteId) throw new Error("Nie udało się znaleźć ID witryny.");
+
+        // 3. Uzyskaj ID listy SharePoint
+        const listId = await getListId(accessToken, siteId, SHAREPOINT_LIST_NAME);
+        if (!listId) throw new Error("Nie udało się znaleźć ID listy.");
+        
+        // 4. Utwórz element na liście SharePoint (na razie bez załącznika)
+        const listItemData = {
+          fields: {
+            Title: name, // Mapuje na kolumnę "Title" (Imię)
+            Email: email // Mapuje na kolumnę "Email"
+            // Jeśli chcesz dodać nazwę pliku jako osobne pole, dodaj tu np.:
+            // NazwaPliku: file.name, // (musiałbyś mieć taką kolumnę na liście)
+          }
+        };
+        const createdItem = await createSharePointListItem(accessToken, siteId, listId, listItemData);
+        if (!createdItem || !createdItem.id) throw new Error("Nie udało się utworzyć elementu listy.");
+        
+        const itemId = createdItem.id;
+
+        // 5. Przeczytaj plik i zakoduj go do Base64
+        const fileContentBase64 = await getFileAsBase64(file);
+
+        // 6. Dodaj plik jako załącznik do utworzonego elementu listy
+        await addAttachmentToListItem(accessToken, siteId, listId, itemId, file.name, fileContentBase64);
+
+        showSuccess('Dane i plik (jako załącznik) zostały pomyślnie przesłane!');
+        document.getElementById('uploadForm').reset();
+
+      } catch (error) {
+        console.error('Błąd:', error);
+        showError('Wystąpił błąd: ' + error.message);
+      }
+    });
+
+    async function getAccessToken() {
+      const tokenUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
+      const params = new URLSearchParams();
+      params.append('client_id', APP_CLIENT_ID);
+      params.append('scope', 'https://graph.microsoft.com/.default');
+      params.append('client_secret', APP_CLIENT_SECRET);
+      params.append('grant_type', 'client_credentials');
+
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        body: params
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Błąd pobierania tokenu:", errorData);
+        throw new Error(`Błąd autoryzacji: ${errorData.error_description || response.statusText}`);
+      }
+      const data = await response.json();
+      return data.access_token;
+    }
+
+    async function getSiteId(accessToken, siteUrl) {
+      const siteHostname = new URL(siteUrl).hostname;
+      const siteServerRelativeUrl = new URL(siteUrl).pathname;
+      const graphUrl = `https://graph.microsoft.com/v1.0/sites/${siteHostname}:${siteServerRelativeUrl}`;
+
+      const response = await fetch(graphUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (!response.ok) {
+         const errorData = await response.json();
+         console.error("Błąd pobierania Site ID:", errorData);
+         throw new Error(`Nie można pobrać Site ID: ${errorData.error?.message || response.statusText}`);
+      }
+      const data = await response.json();
+      return data.id;
+    }
+
+    async function getListId(accessToken, siteId, listName) {
+      const graphUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists?$filter=displayName eq '${encodeURIComponent(listName)}'`;
+      const response = await fetch(graphUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Błąd pobierania List ID:", errorData);
+        throw new Error(`Nie można pobrać List ID: ${errorData.error?.message || response.statusText}`);
+      }
+      const data = await response.json();
+      if (data.value && data.value.length > 0) {
+        return data.value[0].id;
+      }
+      throw new Error(`Lista o nazwie '${listName}' nie została znaleziona.`);
+    }
+    
+    async function createSharePointListItem(accessToken, siteId, listId, itemData) {
+      const graphUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items`;
+      const response = await fetch(graphUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(itemData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Błąd tworzenia elementu listy:", errorData);
+        throw new Error(`Nie udało się utworzyć elementu na liście: ${errorData.error?.message || response.statusText}`);
+      }
+      return await response.json(); // Zwraca utworzony element, który zawiera jego ID
+    }
+
+    async function getFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file); // Czyta plik jako Data URL (zawiera prefix i base64)
+            reader.onload = () => {
+                // Usuwamy prefix "data:[<mediatype>];base64," aby uzyskać czysty string Base64
+                const base64String = reader.result.split(',')[1];
+                resolve(base64String);
+            };
+            reader.onerror = error => reject(error);
+        });
+    }
+
+    async function addAttachmentToListItem(accessToken, siteId, listId, itemId, fileName, fileContentBase64) {
+        // Endpoint do dodawania załączników do elementu listy.
+        // https://learn.microsoft.com/en-us/graph/api/listitem-post-attachments?view=graph-rest-1.0&tabs=http
+        const graphUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listId}/items/${itemId}/attachments`;
+        
+        const attachmentData = {
+            name: fileName,
+            contentBytes: fileContentBase64 // Zawartość pliku zakodowana w Base64
+        };
+
+        const response = await fetch(graphUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json' // Wysyłamy obiekt JSON
+            },
+            body: JSON.stringify(attachmentData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Błąd dodawania załącznika:", errorData);
+            // Próba odczytania bardziej szczegółowego błędu z Graph API
+            let detailedMessage = errorData.error?.message;
+            if (errorData.error?.innerError?.message) {
+                detailedMessage += " | InnerError: " + errorData.error.innerError.message;
+            }
+            throw new Error(`Nie udało się dodać załącznika: ${detailedMessage || response.statusText}`);
+        }
+        return await response.json();
+    }
+
+    function showSuccess(message) {
+        statusMessageDiv.textContent = message;
+        statusMessageDiv.className = 'success';
+    }
+
+    function showError(message) {
+        statusMessageDiv.textContent = message;
+        statusMessageDiv.className = 'error';
+    }
+  </script>
 </body>
-
 </html>
