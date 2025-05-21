@@ -48,6 +48,9 @@
         }
         input[type="text"],
         input[type="email"],
+        input[type="number"], /* Dodane dla spójności */
+        select,             /* Dodane dla spójności */
+        textarea,           /* Dodane dla spójności */
         input[type="file"] {
             width: 100%;
             padding: 10px;
@@ -146,11 +149,6 @@
         // ---------------------------------------------------------------------------
         // TODO: ZAKTUALIZUJ TEN URL NA POPRAWNY URL TWOJEJ FUNKCJI AZURE
         // ---------------------------------------------------------------------------
-        // Jeśli Twoja funkcja nazywa się "SubmitSharePointForm" i jest w Function App "aaron-form-processor",
-        // a poziom autoryzacji to "Function", URL będzie wyglądał mniej więcej tak: 
-        // https://aaron-form-processor.azurewebsites.net/api/SubmitSharePointForm?code=TWOJ_KLUCZ_FUNKCJI
-        // Jeśli poziom autoryzacji to "Anonymous", część "?code=..." nie będzie potrzebna.
-        // Możesz uzyskać ten URL z Azure Portal, przechodząc do funkcji i klikając "Get Function URL".
         const AZURE_FUNCTION_URL = 'https://aaron-form-processor.azurewebsites.net/api/SubmitSharePointForm?code=N3twKRxpv6ZMHH6-WsaxbicvDVsC_iIoZfndgVB_B9kMAzFuxML16g==';
 
         const statusMessageDiv = document.getElementById('statusMessage');
@@ -161,47 +159,106 @@
     statusMessageDiv.textContent = 'Przetwarzanie...';
     statusMessageDiv.className = '';
 
+    // Pobieranie wartości i ich oczyszczanie
     const name = document.getElementById('name').value.trim();
     const email = document.getElementById('email').value.trim();
     const phone = document.getElementById('phone').value.trim();
     const gender = document.getElementById('gender').value;
-    const height = document.getElementById('height').value;
+    const heightInput = document.getElementById('height');
+    const height = heightInput.value.trim();
     const skill = document.getElementById('skill').value.trim();
-    const age = document.getElementById('age').value;
-    const file = document.getElementById('file').files[0];
-    const photo = document.getElementById('photo').files[0];
+    const ageInput = document.getElementById('age');
+    const age = ageInput.value.trim();
+    const photoFile = document.getElementById('photo').files[0];
+    const attachmentFile = document.getElementById('file').files[0];
 
-    // Walidacja podstawowa
-    if (!name || !email || !phone || !gender || !height || !skill || !age || !file || !photo) {
-        showError('Proszę wypełnić wszystkie pola i dodać wymagane pliki.');
+    // --- ULEPSZONA WALIDACJA ---
+    if (!name) {
+        showError('Proszę podać imię.');
         return;
     }
-
+    if (!email) {
+        showError('Proszę podać adres e-mail.');
+        return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showError('Proszę podać poprawny adres e-mail.');
+        return;
+    }
+    if (!phone) {
+        showError('Proszę podać numer telefonu.');
+        return;
+    }
     if (!/^\d{9}$/.test(phone)) {
-        showError('Numer telefonu musi zawierać dokładnie 9 cyfr.');
+        showError('Numer telefonu musi składać się z 9 cyfr.');
+        return;
+    }
+    if (!gender) {
+        showError('Proszę wybrać płeć.');
+        return;
+    }
+    if (!height) {
+        showError('Proszę podać wzrost.');
+        return;
+    }
+    const heightNum = parseInt(height, 10);
+    if (isNaN(heightNum) || heightNum < parseInt(heightInput.min, 10) || heightNum > parseInt(heightInput.max, 10)) {
+        showError(`Proszę podać poprawny wzrost (między ${heightInput.min} a ${heightInput.max} cm).`);
+        return;
+    }
+    if (!skill) {
+        showError('Proszę opisać umiejętność.');
+        return;
+    }
+    if (!age) {
+        showError('Proszę podać wiek.');
+        return;
+    }
+    const ageNum = parseInt(age, 10);
+    if (isNaN(ageNum) || ageNum < parseInt(ageInput.min, 10) || ageNum > parseInt(ageInput.max, 10)) {
+        showError(`Proszę podać poprawny wiek (między ${ageInput.min} a ${ageInput.max}).`);
+        return;
+    }
+    if (!photoFile) {
+        showError('Proszę dodać plik ze zdjęciem.');
+        return;
+    }
+    if (photoFile.size > 4.5 * 1024 * 1024) { // Około 4MB, backend ma swoją walidację
+        showError(`Plik zdjęcia "${photoFile.name}" jest za duży (maks. 4MB).`);
+        return;
+    }
+    // Opcjonalna walidacja typu MIME dla zdjęcia
+    if (!photoFile.type.startsWith('image/')) {
+        showError(`Wybrany plik "${photoFile.name}" nie wygląda na zdjęcie. Proszę wybrać plik graficzny.`);
         return;
     }
 
-    if (file.size > 4.5 * 1024 * 1024 || photo.size > 4.5 * 1024 * 1024) {
-        showError('Każdy z plików nie może przekraczać 4MB.');
+    if (!attachmentFile) {
+        showError('Proszę dodać plik załącznika.');
         return;
     }
+    if (attachmentFile.size > 4.5 * 1024 * 1024) {
+        showError(`Plik załącznika "${attachmentFile.name}" jest za duży (maks. 4MB).`);
+        return;
+    }
+    // --- KONIEC ULEPSZONEJ WALIDACJI ---
 
     try {
-        const fileContentBase64 = await getFileAsBase64(file);
-        const photoBase64 = await getFileAsBase64(photo);
+        const attachmentBase64 = await getFileAsBase64(attachmentFile); // zmieniono kolejność zmiennych dla spójności
+        const photoBase64 = await getFileAsBase64(photoFile);
 
         const payload = {
             name,
             email,
             phone,
             gender,
-            height,
+            height: heightNum.toString(), // Wysyłamy jako string, backend może chcieć sparsować
             skill,
-            age,
-            attachmentFileName: file.name,
-            attachmentBase64: fileContentBase64,
-            photoFileName: photo.name,
+            age: ageNum.toString(),       // Wysyłamy jako string
+            attachmentFileName: attachmentFile.name,
+            attachmentBase64: attachmentBase64,
+            photoFileName: photoFile.name,
             photoBase64: photoBase64
         };
 
@@ -218,13 +275,15 @@
             responseData = await response.json();
         } catch (jsonError) {
             if (!response.ok) {
-                throw new Error(`Błąd serwera ${response.status}: ${response.statusText}.`);
+                // Jeśli odpowiedź nie jest OK i nie ma JSONa, rzuć błąd ze statusem HTTP
+                throw new Error(`Błąd serwera ${response.status}: ${response.statusText}. Odpowiedź nie zawierała treści JSON.`);
             }
-            responseData = { message: 'Odpowiedź bez JSON-a, ale status OK.' };
+            // Jeśli odpowiedź jest OK, ale nie ma JSONa (rzadkie dla POST, ale możliwe)
+            responseData = { message: 'Odpowiedź bez treści JSON, ale status OK.' };
         }
 
         if (!response.ok) {
-            const errorMessage = responseData?.error || `Błąd serwera ${response.status}: ${response.statusText}`;
+            const errorMessage = responseData?.error || responseData?.message || `Błąd serwera ${response.status}.`;
             throw new Error(errorMessage);
         }
 
@@ -249,7 +308,7 @@
                 };
                 reader.onerror = error => {
                     console.error("Błąd odczytu pliku:", error);
-                    reject(new Error("Nie udało się odczytać pliku."));
+                    reject(new Error("Nie udało się odczytać pliku: " + error.message));
                 };
             });
         }
