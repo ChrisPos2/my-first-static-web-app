@@ -24,13 +24,14 @@
             flex-direction: column;
             align-items: stretch;
         }
+        .logo {
+            display: block;
+            margin: 0 auto 32px auto;
+            max-width: 180px;
+            height: auto;
+        }
         h1 {
-            color: #333;
-            margin-top: 0;
-            margin-bottom: 32px;
-            text-align: center;
-            font-size: 2rem;
-            letter-spacing: 1px;
+            display: none;
         }
         form {
             display: flex;
@@ -56,7 +57,7 @@
             font-size: 1rem;
         }
         button[type="submit"] {
-            background-color: #0078d4;
+            background-color: #ef0a70;
             color: white;
             padding: 12px 0;
             border: none;
@@ -68,7 +69,7 @@
             transition: background 0.2s;
         }
         button[type="submit"]:hover {
-            background-color: #005a9e;
+            background-color: #c00a5a;
         }
         #statusMessage {
             margin-top: 18px;
@@ -92,7 +93,7 @@
 
 <body>
     <main>
-        <h1>Aaron form test</h1>
+        <img src="logo.png" alt="Logo" class="logo">
         <form id="uploadForm">
     <div class="form-group">
         <label for="name">Imię:</label>
