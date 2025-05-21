@@ -94,20 +94,50 @@
     <main>
         <h1>Aaron form test</h1>
         <form id="uploadForm">
-            <div class="form-group">
-                <label for="name">Imię:</label>
-                <input type="text" id="name" name="name" required>
-            </div>
-            <div class="form-group">
-                <label for="email">E-mail:</label>
-                <input type="email" id="email" name="email" required>
-            </div>
-            <div class="form-group">
-                <label for="file">Wybierz plik (jako załącznik):</label>
-                <input type="file" id="file" name="file" required>
-            </div>
-            <button type="submit">Prześlij</button>
-        </form>
+    <div class="form-group">
+        <label for="name">Imię:</label>
+        <input type="text" id="name" name="name" required>
+    </div>
+    <div class="form-group">
+        <label for="email">E-mail:</label>
+        <input type="email" id="email" name="email" required>
+    </div>
+    <div class="form-group">
+        <label for="phone">Numer telefonu:</label>
+        <input type="text" id="phone" name="phone" pattern="\d{9}" title="Wprowadź 9-cyfrowy numer" required>
+    </div>
+    <div class="form-group">
+        <label for="gender">Płeć:</label>
+        <select id="gender" name="gender" required>
+            <option value="">-- wybierz --</option>
+            <option value="Mężczyzna">Mężczyzna</option>
+            <option value="Kobieta">Kobieta</option>
+            <option value="Inna">Inna</option>
+            <option value="Nie podaję">Nie podaję</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="height">Wzrost (cm):</label>
+        <input type="number" id="height" name="height" min="50" max="250" required>
+    </div>
+    <div class="form-group">
+        <label for="skill">Umiejętność:</label>
+        <textarea id="skill" name="skill" rows="3" required></textarea>
+    </div>
+    <div class="form-group">
+        <label for="age">Wiek:</label>
+        <input type="number" id="age" name="age" min="1" max="120" required>
+    </div>
+    <div class="form-group">
+        <label for="photo">Zdjęcie:</label>
+        <input type="file" id="photo" name="photo" accept="image/*" required>
+    </div>
+    <div class="form-group">
+        <label for="file">Załącznik:</label>
+        <input type="file" id="file" name="file" required>
+    </div>
+    <button type="submit">Prześlij</button>
+</form>
         <div id="statusMessage"></div>
     </main>
 
@@ -126,76 +156,85 @@
         const uploadForm = document.getElementById('uploadForm');
 
         uploadForm.addEventListener('submit', async function (event) {
-            event.preventDefault();
-            statusMessageDiv.textContent = 'Przetwarzanie...';
-            statusMessageDiv.className = ''; // Resetuj klasy CSS (success/error)
+    event.preventDefault();
+    statusMessageDiv.textContent = 'Przetwarzanie...';
+    statusMessageDiv.className = '';
 
-            const name = document.getElementById('name').value;
-            const email = document.getElementById('email').value;
-            const fileInput = document.getElementById('file');
-            const file = fileInput.files[0];
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const gender = document.getElementById('gender').value;
+    const height = document.getElementById('height').value;
+    const skill = document.getElementById('skill').value.trim();
+    const age = document.getElementById('age').value;
+    const file = document.getElementById('file').files[0];
+    const photo = document.getElementById('photo').files[0];
 
-            if (!name || !email || !file) {
-                showError('Wszystkie pola są wymagane, włącznie z plikiem.');
-                return;
-            }
+    // Walidacja podstawowa
+    if (!name || !email || !phone || !gender || !height || !skill || !age || !file || !photo) {
+        showError('Proszę wypełnić wszystkie pola i dodać wymagane pliki.');
+        return;
+    }
 
-            // Orientacyjny limit rozmiaru pliku po stronie klienta (Azure Function też ma swój limit)
-            if (file.size > 4.5 * 1024 * 1024) { // Trochę więcej niż 4MB ze względu na kodowanie Base64
-                showError('Plik jest za duży. Maksymalny rozmiar to około 4MB.');
-                return;
-            }
+    if (!/^\d{9}$/.test(phone)) {
+        showError('Numer telefonu musi zawierać dokładnie 9 cyfr.');
+        return;
+    }
 
-            try {
-                // 1. Przeczytaj plik i zakoduj go do Base64
-                const fileContentBase64 = await getFileAsBase64(file);
+    if (file.size > 4.5 * 1024 * 1024 || photo.size > 4.5 * 1024 * 1024) {
+        showError('Każdy z plików nie może przekraczać 4MB.');
+        return;
+    }
 
-                // 2. Przygotuj dane do wysłania do Azure Function
-                const formDataForFunction = {
-                    name: name,
-                    email: email,
-                    fileName: file.name,
-                    fileContentBase64: fileContentBase64
-                };
+    try {
+        const fileContentBase64 = await getFileAsBase64(file);
+        const photoBase64 = await getFileAsBase64(photo);
 
-                // 3. Wyślij dane do Azure Function
-                const response = await fetch(AZURE_FUNCTION_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formDataForFunction)
-                });
+        const payload = {
+            name,
+            email,
+            phone,
+            gender,
+            height,
+            skill,
+            age,
+            attachmentFileName: file.name,
+            attachmentBase64: fileContentBase64,
+            photoFileName: photo.name,
+            photoBase64: photoBase64
+        };
 
-                // Spróbuj sparsować odpowiedź jako JSON, niezależnie od statusu, aby uzyskać ewentualny komunikat błędu
-                let responseData;
-                try {
-                    responseData = await response.json();
-                } catch (jsonError) {
-                    // Jeśli odpowiedź nie jest JSONem (np. błąd serwera bez ciała JSON)
-                    if (!response.ok) {
-                         throw new Error(`Błąd serwera ${response.status}: ${response.statusText}. Brak odpowiedzi JSON.`);
-                    }
-                    // Jeśli odpowiedź jest OK, ale nie jest JSONem - to dziwne, ale obsłużmy
-                    responseData = { message: "Otrzymano odpowiedź nie-JSON, ale status OK."};
-                }
-
-
-                if (!response.ok) {
-                    // responseData.error powinien zawierać komunikat błędu z funkcji
-                    // lub użyj response.statusText jeśli responseData.error nie istnieje
-                    const errorMessage = responseData && responseData.error ? responseData.error : `Błąd serwera ${response.status}: ${response.statusText}`;
-                    throw new Error(errorMessage);
-                }
-
-                showSuccess(responseData.message || 'Dane i plik zostały pomyślnie przesłane!');
-                uploadForm.reset();
-
-            } catch (error) {
-                console.error('Błąd podczas przesyłania formularza:', error);
-                showError('Wystąpił błąd: ' + error.message);
-            }
+        const response = await fetch(AZURE_FUNCTION_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
         });
+
+        let responseData;
+        try {
+            responseData = await response.json();
+        } catch (jsonError) {
+            if (!response.ok) {
+                throw new Error(`Błąd serwera ${response.status}: ${response.statusText}.`);
+            }
+            responseData = { message: 'Odpowiedź bez JSON-a, ale status OK.' };
+        }
+
+        if (!response.ok) {
+            const errorMessage = responseData?.error || `Błąd serwera ${response.status}: ${response.statusText}`;
+            throw new Error(errorMessage);
+        }
+
+        showSuccess(responseData.message || 'Formularz został przesłany poprawnie!');
+        uploadForm.reset();
+
+    } catch (error) {
+        console.error('Błąd przesyłania:', error);
+        showError('Wystąpił błąd: ' + error.message);
+    }
+});
 
         // Funkcja do konwersji pliku na string Base64
         function getFileAsBase64(file) {
